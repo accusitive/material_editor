@@ -5,7 +5,7 @@ use std::{borrow::Cow, num::NonZero, thread::current};
 
 use eframe::egui;
 use egui::{
-    include_image, CentralPanel, DragValue, Image, Rect, Sense, SidePanel, Stroke, TopBottomPanel,
+    include_image, CentralPanel, DragValue, Image, Rect, Sense, SidePanel, Slider, Stroke, TopBottomPanel
 };
 use egui_dock::{DockArea, DockState, TabViewer};
 use egui_node_graph2::{
@@ -13,7 +13,12 @@ use egui_node_graph2::{
     PanZoom, UserResponseTrait, WidgetValueTrait,
 };
 use serde::{Deserialize, Serialize};
+use strum::VariantArray;
+use strum_macros::VariantArray;
+use tab::Tab;
 
+mod ui;
+mod tab;
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let options = eframe::NativeOptions {
@@ -22,22 +27,21 @@ fn main() -> eframe::Result {
     };
 
     eframe::run_native(
-        "My egui App",
+        "Material Editor",
         options,
         Box::new(|cc| {
-            // This gives us image support:
             egui_extras::install_image_loaders(&cc.egui_ctx);
 
-            Ok(Box::new(MyApp::new()))
+            Ok(Box::new(MaterialEditorApp::new()))
         }),
     )
 }
 
-struct MyApp {
+struct MaterialEditorApp {
     dock_state: DockState<Tab>,
 }
 
-impl MyApp {
+impl MaterialEditorApp {
     fn new() -> Self {
         let mut materials = vec![];
         for material in std::fs::read_dir("./materials").unwrap() {
@@ -57,10 +61,10 @@ impl MyApp {
             dock_state: DockState::new(materials),
         }
     }
-    fn load(path: &str) -> Option<MyEditorState> {
+    fn load(path: &str) -> Option<MaterialEditorState> {
         match std::fs::read(path) {
             Ok(editor_state_bytes) => {
-                let ed: MyEditorState =
+                let ed: MaterialEditorState =
                     serde_json::from_str(&String::from_utf8(editor_state_bytes).unwrap())
                         .unwrap_or_default();
                 Some(ed)
@@ -90,7 +94,7 @@ impl MyApp {
             .unwrap()[0]
     }
 }
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, VariantArray, Deserialize, Serialize)]
 
 pub enum MaterialEditorNodeTemplate {
     Constant,
@@ -101,7 +105,7 @@ pub enum MaterialEditorNodeTemplate {
 }
 #[derive(Debug, Default)]
 pub struct MaterialEditorGraphState {}
-type MyEditorState = GraphEditorState<
+type MaterialEditorState = GraphEditorState<
     MaterialEditorNodeData,
     MaterialEditorDataType,
     MaterialEditorValueType,
@@ -120,7 +124,7 @@ pub enum MaterialEditorDataType {
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub enum MaterialEditorValueType {
-    I32 { value: i32 },
+    F32 { value: f32 },
     FVec2(f32, f32),
     TextureId(u32),
 }
@@ -128,7 +132,7 @@ pub enum MaterialEditorValueType {
 pub enum MaterialEditorResponse {}
 impl Default for MaterialEditorValueType {
     fn default() -> Self {
-        Self::I32 { value: 0 }
+        Self::F32 { value: 0.0 }
     }
 }
 impl DataTypeTrait<MaterialEditorGraphState> for MaterialEditorDataType {
@@ -144,6 +148,7 @@ impl DataTypeTrait<MaterialEditorGraphState> for MaterialEditorDataType {
         }
     }
 }
+
 impl NodeTemplateTrait for MaterialEditorNodeTemplate {
     type NodeData = MaterialEditorNodeData;
 
@@ -193,7 +198,7 @@ impl NodeTemplateTrait for MaterialEditorNodeTemplate {
                     node_id,
                     "constant".to_string(),
                     MaterialEditorDataType::Scalar,
-                    MaterialEditorValueType::I32 { value: 0 },
+                    MaterialEditorValueType::F32 { value: 50.0 },
                     egui_node_graph2::InputParamKind::ConstantOnly,
                     true,
                 );
@@ -208,7 +213,7 @@ impl NodeTemplateTrait for MaterialEditorNodeTemplate {
                     node_id,
                     "a".to_string(),
                     MaterialEditorDataType::Scalar,
-                    MaterialEditorValueType::I32 { value: 0 },
+                    MaterialEditorValueType::F32 { value: 0.0 },
                     egui_node_graph2::InputParamKind::ConnectionOrConstant,
                     true,
                 );
@@ -216,7 +221,7 @@ impl NodeTemplateTrait for MaterialEditorNodeTemplate {
                     node_id,
                     "b".to_string(),
                     MaterialEditorDataType::Scalar,
-                    MaterialEditorValueType::I32 { value: 0 },
+                    MaterialEditorValueType::F32 { value: 0.0 },
                     egui_node_graph2::InputParamKind::ConnectionOrConstant,
                     true,
                 );
@@ -258,7 +263,7 @@ impl NodeTemplateTrait for MaterialEditorNodeTemplate {
                     node_id,
                     "x".to_string(),
                     MaterialEditorDataType::Scalar,
-                    MaterialEditorValueType::I32 { value: 0 },
+                    MaterialEditorValueType::F32 { value: 0.0 },
                     egui_node_graph2::InputParamKind::ConnectionOrConstant,
                     true,
                 );
@@ -266,7 +271,7 @@ impl NodeTemplateTrait for MaterialEditorNodeTemplate {
                     node_id,
                     "y".to_string(),
                     MaterialEditorDataType::Scalar,
-                    MaterialEditorValueType::I32 { value: 0 },
+                    MaterialEditorValueType::F32 { value: 0.0 },
                     egui_node_graph2::InputParamKind::ConnectionOrConstant,
                     true,
                 );
@@ -279,18 +284,12 @@ impl NodeTemplateTrait for MaterialEditorNodeTemplate {
         }
     }
 }
-pub struct AllMyNodeTemplates;
-impl NodeTemplateIter for AllMyNodeTemplates {
+pub struct AllNodeTemplates;
+impl NodeTemplateIter for AllNodeTemplates {
     type Item = MaterialEditorNodeTemplate;
 
     fn all_kinds(&self) -> Vec<Self::Item> {
-        vec![
-            MaterialEditorNodeTemplate::Constant,
-            MaterialEditorNodeTemplate::Add,
-            MaterialEditorNodeTemplate::TexCoord,
-            MaterialEditorNodeTemplate::TextureSample,
-            MaterialEditorNodeTemplate::MakeFVec2,
-        ]
+        MaterialEditorNodeTemplate::VARIANTS.to_vec()
     }
 }
 impl WidgetValueTrait for MaterialEditorValueType {
@@ -309,10 +308,10 @@ impl WidgetValueTrait for MaterialEditorValueType {
         node_data: &Self::NodeData,
     ) -> Vec<Self::Response> {
         match self {
-            MaterialEditorValueType::I32 { mut value } => {
+            MaterialEditorValueType::F32 { value } => {
                 ui.horizontal(|ui| {
                     ui.label(param_name);
-                    ui.add(DragValue::new(&mut value).speed(5.0));
+                    ui.add(DragValue::new(value));
                 });
             }
             MaterialEditorValueType::TextureId(id) => {
@@ -346,138 +345,5 @@ impl NodeDataTrait for MaterialEditorNodeData {
         Self::Response: egui_node_graph2::UserResponseTrait,
     {
         vec![]
-    }
-}
-impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let screen_rect = ctx.screen_rect();
-        let width = screen_rect.width();
-        let height = screen_rect.height();
-
-        let left_width = width * 0.2; // 1/5 of total width
-        let right_width = width * 0.2; // 1/5 of total width
-        let center_width = width * 0.4; // 2/5 of total width
-        let bottom_height = height * 0.4; // 2/5 of total height
-
-        // Top menu bar
-        TopBottomPanel::top("top_bar").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Save").clicked() {
-                        self.save().unwrap();
-                    }
-                    // if ui.button("Open").clicked() {
-                    // }
-                });
-                ui.menu_button("Editor", |ui| {
-                    if ui.button("Reset Pan/Zoom").clicked() {
-                        // for material_editor_state in self.material_editor_states {
-                        //     material_editor_state.pan_zoom = PanZoom::default();
-                        // }
-                    }
-                })
-            });
-        });
-
-        // Bottom panel for Content Browser
-        TopBottomPanel::bottom("content_browser")
-            .min_height(bottom_height)
-            .show(ctx, |ui| {
-                ui.heading("Content Browser");
-                ui.label("Assets go here...");
-            });
-
-        // Left panel for Material Properties
-        SidePanel::left("material_properties")
-            .exact_width(left_width)
-            .show(ctx, |ui| {
-                ui.heading("Material Properties");
-                ui.label("Properties go here...");
-            });
-
-        // Right panel for Texture References
-        SidePanel::right("texture_references")
-            .exact_width(right_width)
-            .show(ctx, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for i in 0..50 {
-                        let response = ui.dnd_drag_source(egui::Id::new(i), (), |ui| {
-                            ui.label(format!("Texture Reference here {}", i));
-                            let source = include_image!("../test.jpg");
-                            let image = egui::Image::new(source);
-                            ui.add(image.max_width(128.0).max_height(128.0));
-                        });
-
-                        let current_tab = self.get_current_tab_mut();
-
-                        if response.response.drag_stopped() {
-                            let pointer = ui.input(|i| i.pointer.interact_pos().unwrap());
-                            dbg!(&pointer, &current_tab.graph_state.pan_zoom.clip_rect);
-                            if current_tab.graph_state.pan_zoom.clip_rect.contains(pointer) {
-                                let template = MaterialEditorNodeTemplate::TextureSample;
-
-                                current_tab.graph_state.graph.add_node(
-                                    template.node_graph_label(&mut current_tab.user_state),
-                                    MaterialEditorNodeData {
-                                        template: MaterialEditorNodeTemplate::TextureSample,
-                                    },
-                                    |graph, node_id| {
-                                        current_tab.graph_state.node_order.push(node_id);
-
-                                        let pan = current_tab.graph_state.pan_zoom.pan; // vec2 containing pan info
-                                        let clip_rect = current_tab.graph_state.pan_zoom.clip_rect;
-
-                                        let graph_pos = egui::Pos2 {
-                                            x: ((pointer.x - clip_rect.x_range().min) - pan.x),
-                                            y: ((pointer.y - clip_rect.y_range().min) - pan.y),
-                                        };
-                                        current_tab
-                                            .graph_state
-                                            .node_positions
-                                            .insert(node_id, graph_pos);
-                                        MaterialEditorNodeTemplate::TextureSample.build_node(
-                                            graph,
-                                            &mut current_tab.user_state,
-                                            node_id,
-                                        );
-                                    },
-                                );
-                            }
-                        }
-                    }
-                });
-            });
-
-        // Main content: Graph Editor
-        CentralPanel::default().show(ctx, |ui| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                DockArea::new(&mut self.dock_state)
-                    .draggable_tabs(false)
-                    .show_inside(ui, &mut MyTabViewer);
-            })
-        });
-    }
-}
-struct Tab {
-    graph_state: MyEditorState,
-    user_state: MaterialEditorGraphState,
-    material_name: String,
-}
-// type Tab = (MyEditorState, MaterialEditorGraphState);
-struct MyTabViewer;
-impl TabViewer for MyTabViewer {
-    type Tab = Tab;
-
-    fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-        tab.material_name.as_str().into()
-    }
-
-    fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-        let _ = tab.graph_state.draw_graph_editor(
-            ui,
-            AllMyNodeTemplates,
-            &mut tab.user_state,
-            Vec::default(),
-        );
     }
 }
